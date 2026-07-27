@@ -8,6 +8,17 @@ const PORT = 3000;
 
 app.use(express.json());
 
+// Enable CORS for Vercel serverless functions
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  next();
+});
+
 // API route to fetch Instagram media details via RapidAPI
 app.post('/api/fetch-instagram', async (req, res) => {
   try {
@@ -137,8 +148,9 @@ app.post('/api/fetch-instagram', async (req, res) => {
     let rawData: any = null;
     let apiSuccess = false;
 
-    // Execute sequentially through API Pool (API #1 -> API #2 -> API #3...) with fast failover
-    for (let aIdx = 0; aIdx < API_POOL.length; aIdx++) {
+    // Execute sequentially through API Pool (API #1 -> API #2 -> API #3...) with fast failover for Vercel speed
+    const maxAttempts = Math.min(API_POOL.length, 5);
+    for (let aIdx = 0; aIdx < maxAttempts; aIdx++) {
       const apiConfig = API_POOL[aIdx];
       if (!apiConfig.key || apiConfig.key.includes('placeholder')) {
         continue;
@@ -148,7 +160,7 @@ app.post('/api/fetch-instagram', async (req, res) => {
 
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout for RapidAPI response
+        const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s timeout for RapidAPI response on Vercel
 
         let endpoint = `https://${apiConfig.host}/unified/index?url=${encodeURIComponent(trimmedUrl)}`;
         if (apiConfig.host === 'instagram-api39.p.rapidapi.com' || apiConfig.host === 'instagram-api-special.p.rapidapi.com') {
@@ -176,7 +188,7 @@ app.post('/api/fetch-instagram', async (req, res) => {
         }
       } catch (apiErr: any) {
         if (apiErr?.name === 'AbortError') {
-          console.warn(`[API Warning] Key #${aIdx + 1} timed out after 8s, moving to next key...`);
+          console.warn(`[API Warning] Key #${aIdx + 1} timed out after 3s, moving to next key...`);
         } else {
           console.warn(`[API Error] Key #${aIdx + 1} failed:`, apiErr?.message || apiErr);
         }
@@ -450,17 +462,37 @@ app.get('/api/proxy-download', async (req, res) => {
     // Strictly enforce MP4 content type so mobile phones and desktop media players play video immediately
     const contentType = isImage ? 'image/jpeg' : 'video/mp4';
 
-    res.setHeader('Content-Type', contentType);
-    res.setHeader('Content-Length', buffer.length.toString());
-    res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"; filename*=UTF-8''${encodeURIComponent(safeFilename)}`);
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('Content-Transfer-Encoding', 'binary');
-    res.setHeader('Accept-Ranges', 'bytes');
-    res.setHeader('Cache-Control', 'public, max-age=86400');
+    // If on Vercel or streaming available, pipe body stream to avoid 4.5MB Vercel serverless payload limit
+    if (response && response.ok && response.body && !isCorrupt) {
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"; filename*=UTF-8''${encodeURIComponent(safeFilename)}`);
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Cache-Control', 'public, max-age=86400');
 
-    return res.send(buffer);
+      try {
+        // @ts-ignore
+        const stream = Readable.fromWeb(response.body);
+        return stream.pipe(res);
+      } catch (streamErr) {
+        console.warn('[Proxy Stream Fallback] Pipe failed, redirecting directly:', streamErr);
+        return res.redirect(302, mediaUrl);
+      }
+    }
+
+    // Fallback if direct fetch failed or corrupt: redirect directly to media URL or fallback media
+    if (isCorrupt) {
+      const fallbackUrl = isImage
+        ? 'https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=1200&auto=format&fit=crop&q=80'
+        : 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4';
+      return res.redirect(302, fallbackUrl);
+    }
+
+    return res.redirect(302, mediaUrl);
   } catch (err: any) {
     console.error('[Download Proxy Error]', err);
+    if (req.query.url && typeof req.query.url === 'string') {
+      return res.redirect(302, req.query.url);
+    }
     return res.status(500).send('Error proxying media download.');
   }
 });

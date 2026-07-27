@@ -1,9 +1,9 @@
 @import "tailwindcss";
 
-/* Custom ultra-thin scrollbar */
+/* Custom ultra-thin & sleek scrollbar */
 ::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+  width: 3px;
+  height: 3px;
 }
 
 ::-webkit-scrollbar-track {
@@ -11,7 +11,7 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: rgba(148, 163, 184, 0.4);
   border-radius: 9999px;
 }
 
@@ -22,5 +22,5 @@
 /* Firefox scrollbar width */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #cbd5e1 transparent;
+  scrollbar-color: rgba(148, 163, 184, 0.4) transparent;
 }
