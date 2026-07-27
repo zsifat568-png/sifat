@@ -1,0 +1,6 @@
+{
+  "name": "Instagram Video Downloader",
+  "description": "Fast and simple Instagram video, reel, photo, and story downloader app with instant media preview and direct HD downloads.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
