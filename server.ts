@@ -1,6 +1,5 @@
 import express from 'express';
 import path from 'path';
-import { createServer as createViteServer } from 'vite';
 import { Readable } from 'stream';
 
 const app = express();
@@ -20,7 +19,7 @@ app.use((req, res, next) => {
 });
 
 // API route to fetch Instagram media details via RapidAPI
-app.post('/api/fetch-instagram', async (req, res) => {
+app.post(['/api/fetch-instagram', '/fetch-instagram'], async (req, res) => {
   try {
     const { url } = req.body;
 
@@ -374,7 +373,7 @@ app.post('/api/fetch-instagram', async (req, res) => {
 });
 
 // Proxy download endpoint to force media download attachment headers for mobile & desktop
-app.get('/api/proxy-download', async (req, res) => {
+app.get(['/api/proxy-download', '/proxy-download'], async (req, res) => {
   try {
     let mediaUrl = req.query.url as string;
     let customFilename = (req.query.filename as string) || 'snapinsta_video.mp4';
@@ -499,6 +498,7 @@ app.get('/api/proxy-download', async (req, res) => {
 
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
